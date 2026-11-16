@@ -1,95 +1,93 @@
 import { useEffect, useState } from "react";
-import { LoadScript, GoogleMap, Marker } from "@react-google-maps/api";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-const containerStyle = { width: "100%", height: "100%" };
-const defaultCenter = { lat: 28.6139, lng: 77.209 };
-const mapStyles = [
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "transit", stylers: [{ visibility: "simplified" }] },
-  { elementType: "geometry", stylers: [{ color: "#e8eee1" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#526253" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#f7faf4" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#d9e7cf" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9dbd0" }] },
-];
+const defaultCenter = [20.2961, 85.8245]; // Bhubaneswar
 
-const MapFallback = ({ title, message }) => (
-  <div className="map-fallback">
-    <div className="map-fallback-card">
-      <strong>{title}</strong>
-      <span>{message}</span>
-    </div>
-  </div>
-);
+const locationIcon = L.divIcon({
+  className: "abhi-location-marker",
+  html: '<div style="width:18px;height:18px;background:#2563eb;border:4px solid white;border-radius:50%;box-shadow:0 2px 8px #555"></div>',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+});
 
-const LiveTracking = () => {
-  const [currentPosition, setCurrentPosition] = useState(null);
+function RecenterMap({ position }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (position) map.setView(position, 15);
+  }, [position, map]);
+
+  return null;
+}
+
+export default function LiveTracking() {
+  const [position, setPosition] = useState(null);
   const [locationError, setLocationError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
 
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocationError(true);
-      setIsLoading(false);
-      return undefined;
+      return;
     }
 
-    const handlePositionUpdate = (position) => {
-      const { latitude, longitude } = position.coords;
-      setCurrentPosition({ lat: latitude, lng: longitude });
-      setIsLoading(false);
-    };
-    const handleLocationError = () => {
-      setLocationError(true);
-      setIsLoading(false);
+    const onSuccess = (result) => {
+      setPosition([
+        result.coords.latitude,
+        result.coords.longitude,
+      ]);
+      setLocationError(false);
     };
 
-    navigator.geolocation.getCurrentPosition(handlePositionUpdate, handleLocationError, {
-      enableHighAccuracy: true,
-      timeout: 8000,
-      maximumAge: 15000,
-    });
-    const watchId = navigator.geolocation.watchPosition(handlePositionUpdate, handleLocationError, {
-      enableHighAccuracy: true,
-      timeout: 12000,
-      maximumAge: 15000,
-    });
+    const onError = () => setLocationError(true);
+
+    navigator.geolocation.getCurrentPosition(onSuccess, onError);
+
+    const watchId = navigator.geolocation.watchPosition(
+      onSuccess,
+      onError,
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  if (!mapsApiKey) {
-    return <MapFallback title="Your map is ready to connect" message="Add a Google Maps API key to enable live location and route tracking." />;
-  }
-
-  if (locationError) {
-    return <MapFallback title="Turn on location to see your map" message="Allow location access in your browser, then return here to follow your ride." />;
-  }
-
-  if (isLoading || !currentPosition) {
-    return <MapFallback title="Finding your location" message="Your live map will appear as soon as your location is ready." />;
-  }
-
   return (
-    <LoadScript googleMapsApiKey={mapsApiKey} loadingElement={<MapFallback title="Loading your map" message="Getting the streets ready." />}>
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={currentPosition || defaultCenter}
-        zoom={15}
-        options={{
-          mapTypeControl: false,
-          fullscreenControl: false,
-          streetViewControl: false,
-          zoomControl: false,
-          styles: mapStyles,
-        }}
+    <div style={{ width: "100%", height: "100%", minHeight: "100vh" }}>
+      <MapContainer
+        center={position || defaultCenter}
+        zoom={13}
+        style={{ width: "100%", height: "100%" }}
+        scrollWheelZoom
       >
-        <Marker position={currentPosition} />
-      </GoogleMap>
-    </LoadScript>
-  );
-};
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
 
-export default LiveTracking;
+        {position && (
+          <Marker position={position} icon={locationIcon}>
+            <Popup>Your current location</Popup>
+          </Marker>
+        )}
+
+        <RecenterMap position={position} />
+      </MapContainer>
+
+      {locationError && (
+        <div style={{
+          position: "absolute",
+          bottom: 20,
+          left: 20,
+          background: "white",
+          padding: 10,
+          borderRadius: 8,
+          zIndex: 1000
+        }}>
+          Allow location access to show your live position.
+        </div>
+      )}
+    </div>
+  );
+}
