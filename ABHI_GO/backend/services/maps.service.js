@@ -48,25 +48,39 @@ module.exports.getDistance = async (origin, destination) => {
 
 module.exports.getSuggestions = async (address) => {
     try {
-        const { data } = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
-            params: {
-                input: address,
-                key: process.env.GOOGLE_MAPS_API
+        const { data } = await axios.get(
+            'https://photon.komoot.io/api/',
+            {
+                params: {
+                    q: address,
+                    limit: 6,
+                    lang: 'en'
+                },
+                timeout: 10000
             }
+        );
+
+        return (data.features || []).map((feature) => {
+            const p = feature.properties || {};
+
+            const parts = [
+                p.name,
+                p.street,
+                p.city || p.locality,
+                p.state,
+                p.country
+            ].filter(Boolean);
+
+            return {
+                place_id: `${p.osm_type || 'place'}-${p.osm_id || ''}`,
+                description: [...new Set(parts)].join(', ')
+            };
         });
-
-        if (data.status === 'OK' && data.predictions) {
-            return data.predictions;
-        } else {
-            // console.warn(`Google Places API returned status: ${data.status} ${data.error_message || ''}`);
-            return [];
-        }
     } catch (error) {
-        console.error(error);
-        throw error;
+        console.error('Location suggestion error:', error.message);
+        return [];
     }
-}
-
+};
 module.exports.getCaptainsInTheRadius = async (ltd, lng, radius) => {
 
     // radius in km
